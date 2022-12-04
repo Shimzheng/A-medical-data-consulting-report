@@ -9,4 +9,6 @@ The question they have is this:
 
 - Can you predict which of the four groups someone will be in, based on these variables and these data? 
 
-- Is there more than one way of doing this? They are asking you to explore the associations and the potential to get a useful prediction.
+- Is there more than one way of doing this? 
+
+They are asking you to explore the associations and the potential to get a useful prediction.
