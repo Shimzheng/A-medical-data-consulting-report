@@ -1,0 +1,483 @@
+---
+title: "Appendix"
+author: "R code"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#package installation
+#install.packages('dplyr')
+#install.packages('jmv')
+#install.packages('rcompanion')
+#install.packages("DescTools")
+```
+
+
+```{r}
+#load and glimpse the dataset
+artery_data<-read.table('/Users/jasmyn/Desktop/artery-1.csv',header=T,sep=",")
+library(dplyr)
+glimpse(artery_data)
+
+```
+
+Because we only need to predict radial artery (RA) medial calcification and internal thoracic artery (ITA) intimal abnormality bases on the age, gender, diabetes, ever smoked, presence of Peripheral vascular disease (PVD) and presence of Cerebrovascular disease (CVD) of the patients, we extract these variables from the original dataset as a new dataset. 
+
+```{r}
+#extract the features 
+artery_data2 <- artery_data[,c(1:6,9,10)]
+glimpse(artery_data2)
+```
+
+In particular, for independent variable ITA intimal abnormality, we only consider whether it has an exception, However, there are 3 categories in the original data (0 = normal, 1 = intimal thickening, 2 = atherosclerosis). Therefore, we combine the situation of intimal thickening and atherosclerosis into abnormality and use serial number 1 to represent.
+
+```{r}
+# Transformation: 
+# ITA intimal abnormality (0 = normal, 1 = intimal thickening, 2 = atherosclerosis) 
+# --> ITA intimal abnormality (0 = normal, 1 = abnormal)
+which(artery_data2$ITA.intimal.abnormality==2)
+
+```
+
+However, after checking the dataset, there are no subjects with ITA atherosclerosis, so we don't need to make changes to the dataset. 
+
+Then,we use chi-square test to test the whether the two outcomes are independent with each other.
+
+```{r}
+#chi-square test in two outcomes
+table(artery_data2$RA.medial.calcification, artery_data2$ITA.intimal.abnormality)
+chisq.test(artery_data2$RA.medial.calcification, artery_data2$ITA.intimal.abnormality, correct=FALSE)
+```
+
+Because p-value > 0.05 significance level, indicating that RA.medial.calcification and ITA.intimal.abnormality are significantly independent.
+
+According to the result, Cramer’s V between two dependent variables is 0.01, indicating that there is just a negligible correlation between them. 
+
+```{r}
+#test the correlation btw. independent variables
+library(rcompanion)
+cramerV(artery_data2$Gender, artery_data2$Diabetes,bias.correct = FALSE)
+cramerV(artery_data2$Gender, artery_data2$Ever.smoked,bias.correct = FALSE)
+cramerV(artery_data2$Gender, artery_data2$PVD,bias.correct = FALSE)
+cramerV(artery_data2$Gender, artery_data2$CVD,bias.correct = FALSE)
+cramerV(artery_data2$Diabetes, artery_data2$Ever.smoked,bias.correct = FALSE)
+cramerV(artery_data2$Diabetes, artery_data2$PVD,bias.correct = FALSE)
+cramerV(artery_data2$Diabetes, artery_data2$CVD,bias.correct = FALSE)
+cramerV(artery_data2$Ever.smoked, artery_data2$PVD,bias.correct = FALSE)
+cramerV(artery_data2$Ever.smoked, artery_data2$CVD,bias.correct = FALSE)
+cramerV(artery_data2$PVD, artery_data2$CVD,bias.correct = FALSE)
+
+```
+
+Also, the correlation of the independent variables between each other also relatively low. 
+
+Then, we use four groups with the serial number 0, 1, 2, and 3 to represent four groups of the two outcomes (
+0 = RA medial calcification: no & ITA intimal abnormality: no, 
+1 = RA medial calcification: yes & ITA intimal abnormality: no, 
+2 = RA medial calcification: no & ITA intimal abnormality: yes,
+3 = RA medial calcification: yes & ITA intimal abnormality: yes
+)
+ 
+```{r}
+# add a new column to represent the four groups of the two outcomes
+artery_data3 <- artery_data2 %>% 
+  mutate(RA_ITA = ifelse(RA.medial.calcification == 0 & 
+                           ITA.intimal.abnormality == 0, 0, 
+                         ifelse(RA.medial.calcification == 1 & 
+                                  ITA.intimal.abnormality == 0, 1, 
+                                ifelse(RA.medial.calcification == 0 & 
+                                         ITA.intimal.abnormality == 1, 2, 3))))
+
+#test multicollinearity (acceptable if vif < 2)
+library(car)
+m <- lm(RA_ITA ~., data = artery_data3)
+vif(m)
+
+artery_data3$RA_ITA <- as.factor(artery_data3$RA_ITA)
+```
+
+```{r}
+#check missing value
+sum(is.na(artery_data3))
+```
+
+```{r}
+artery_data4 <- artery_data3[,c(1:6,9)]
+str(artery_data4)
+```
+
+```{r}
+# Scale the continous variables
+artery_data4$Age <- scale(artery_data$Age)
+
+# Formatted the categorical variables
+artery_data4$Gender = factor(artery_data4$Gender)
+artery_data4$Diabetes = factor(artery_data4$Diabetes)
+artery_data4$Ever.smoked = factor(artery_data4$Ever.smoked)
+artery_data4$PVD = factor(artery_data4$PVD)
+artery_data4$CVD = factor(artery_data4$CVD)
+str(artery_data4)
+```
+
+In addition, we used 0 as the reference level (i.e. the subject who is normal), because there are more than 2 levels.
+
+```{r}
+artery_data4$RA_ITA_ref <- relevel(artery_data4$RA_ITA, ref = "0")
+# Give the names to each level
+levels(artery_data4$RA_ITA_ref) <- c("normal","RAyes_ITAno","RAno_ITAyes", "RAyes_ITAyes")
+```
+
+Descriptive statistics of all the variables.
+
+```{r}
+#Descriptive statistics
+library(jmv)
+descriptives(artery_data4, vars = vars(Age, Gender, Diabetes, 
+                                       Ever.smoked, PVD, CVD, RA_ITA_ref), freq = TRUE)
+```
+
+
+```{r}
+# bar chart of dependent variable
+library(ggplot2)
+p <- ggplot(artery_data4, aes(x = factor(RA_ITA), fill = RA_ITA)) + geom_bar()
+p + labs(x = "The bar chart of the count of each label in the independent variable. ")
+
+```
+
+In order to find the relationship between the dependent variables and explanatory variables and achieve prediction. According to the Pareto principle, we treated 80% data as the training data, and 20% data as the testing data. 
+
+```{r}
+#training / testing dataset
+set.seed(123)
+s = sort(sample(nrow(artery_data4), nrow(artery_data4)*0.8))
+train_data<-artery_data4[s,]
+test_data<-artery_data4[-s,]
+```
+
+# Method 1: Multinomial logistic regression
+
+Also, since there are 4 kinds of classes in the dependent variable (i.e. a multiclass classification ), first, a kind of generalization of logistic regression: multinomial logistic regression was selected to do this classification.
+
+```{r}
+library(nnet)
+mult_logis_model<-multinom(RA_ITA_ref~Age+Gender+Diabetes+Ever.smoked+PVD+CVD,data = train_data)
+summary(mult_logis_model)
+exp(coef(mult_logis_model))
+
+```
+
+```{r}
+# 2-tailed z test
+coef<-summary(mult_logis_model)$coefficients
+se<-summary(mult_logis_model)$standard.errors
+z <- coef/se
+(p_value <- (1 - pnorm(abs(z), 0, 1)) * 2)
+```
+
+```{r}
+#Test the model fit info.
+#The fitting model only with "intercept"
+Intercept_model <- multinom(RA_ITA_ref~1,data = train_data)
+summary(Intercept_model)
+anova(Intercept_model, mult_logis_model)
+```
+
+The p-value < 0.05 indicates that our model fits significantly better than the model without any predictors.
+
+```{r}
+#Goodness of fit test
+chisq.test(train_data$RA_ITA_ref,predict(mult_logis_model))
+```
+
+```{r}
+#Pseudo R-Square of the model
+library(DescTools)
+PseudoR2(mult_logis_model, which = c("CoxSnell","Nagelkerke","McFadden"))
+```
+
+According to the Cox and Snell’s R-Square, the results concluded that  there is 31.5% relationship between the predictors and the response variable. Nagelkerke’s R-Square indicates that 36.3% of the variation in the predictors is explained by this model. McFadden’s R-Square shows that the relationship of 18.8% between the predictors and the response variable.
+
+```{r}
+#significance of predictors by likelihood ratio tests 
+library(lmtest)
+lrtest(mult_logis_model, "Age")
+lrtest(mult_logis_model, "Gender")
+lrtest(mult_logis_model, "Diabetes")
+lrtest(mult_logis_model, "Ever.smoked")
+lrtest(mult_logis_model, "PVD")
+lrtest(mult_logis_model, "CVD")
+```
+
+According to the results of the likelihood ratio tests, Age had significant main effects the dependent variable.
+
+After fitting the multinomial logistic regression model, prediction and validation based on train data and test data would be implemented in this part.
+
+```{r}
+#predict the outcome based on train data
+train_predict = predict(mult_logis_model, train_data, "class")
+train_class_table = table(train_data$RA_ITA_ref, train_predict)
+round((sum(diag(train_class_table))/sum(train_class_table))*100,2)
+
+#predict the outcome based on test data
+test_predict = predict(mult_logis_model, test_data, "class")
+test_class_table = table(test_data$RA_ITA_ref, test_predict)
+round((sum(diag(test_class_table))/sum(test_class_table))*100,2)
+
+```
+
+```{r}
+#stepwide model
+library(MASS)
+mult_logis_model2 <- mult_logis_model %>% stepAIC(trace = FALSE)
+summary(mult_logis_model2)
+exp(coef(mult_logis_model2))
+```
+
+```{r}
+# 2-tailed z test
+coef<-summary(mult_logis_model2)$coefficients
+se<-summary(mult_logis_model2)$standard.errors
+z <- coef/se
+(p_value <- (1 - pnorm(abs(z), 0, 1)) * 2)
+
+#Test the model fit info.
+anova(Intercept_model, mult_logis_model2)
+anova(mult_logis_model, mult_logis_model2)
+
+#Goodness of fit test
+chisq.test(train_data$RA_ITA_ref,predict(mult_logis_model2))
+
+#Pseudo R-Square of the model
+PseudoR2(mult_logis_model2, which = c("CoxSnell","Nagelkerke","McFadden"))
+
+#significance of predictors by likelihood ratio tests 
+lrtest(mult_logis_model2, "Age")
+lrtest(mult_logis_model2, "Diabetes")
+lrtest(mult_logis_model2, "Ever.smoked")
+```
+
+
+```{r}
+#predict the outcome based on train data
+train_predict = predict(mult_logis_model2, train_data, "class")
+train_class_table = table(train_data$RA_ITA_ref, train_predict)
+round((sum(diag(train_class_table))/sum(train_class_table))*100,2)
+
+#predict the outcome based on test data
+test_predict = predict(mult_logis_model2, test_data, "class")
+test_class_table = table(test_data$RA_ITA_ref, test_predict)
+round((sum(diag(test_class_table))/sum(test_class_table))*100,2)
+
+```
+
+In addition, we tried to divide different age into 4 different age groups as a categorical variable.
+
+```{r}
+artery_data4$Age <- artery_data3$Age
+summary(artery_data4$Age)
+artery_data5 <- mutate(artery_data4,
+                     Age_group = ifelse(Age <= 50 ,'0', 
+                                        ifelse(Age > 50 & Age <=60 ,'1',
+                                                    ifelse(Age > 60 & Age <=70, '2','3'))))
+```
+
+
+```{r}
+set.seed(123)
+s = sort(sample(nrow(artery_data5), nrow(artery_data5)*0.8))
+train_data<-artery_data5[s,]
+test_data<-artery_data5[-s,]
+
+#model3
+mult_logis_model3<-multinom(RA_ITA_ref~Age_group+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                            data = train_data)
+summary(mult_logis_model3)
+exp(coef(mult_logis_model3))
+
+# 2-tailed z test
+coef<-summary(mult_logis_model3)$coefficients
+se<-summary(mult_logis_model3)$standard.errors
+z <- coef/se
+(p_value <- (1 - pnorm(abs(z), 0, 1)) * 2)
+
+#Test the model fit info.
+anova(Intercept_model, mult_logis_model3)
+anova(mult_logis_model, mult_logis_model3)
+anova(mult_logis_model2, mult_logis_model3)
+
+#Goodness of fit test
+chisq.test(train_data$RA_ITA_ref,predict(mult_logis_model3))
+
+#Pseudo R-Square of the model
+PseudoR2(mult_logis_model3, which = c("CoxSnell","Nagelkerke","McFadden"))
+
+#significance of predictors by likelihood ratio tests 
+lrtest(mult_logis_model3, "Age_group")
+lrtest(mult_logis_model3, "Gender")
+lrtest(mult_logis_model3, "Diabetes")
+lrtest(mult_logis_model3, "Ever.smoked")
+lrtest(mult_logis_model3, "PVD")
+lrtest(mult_logis_model3, "CVD")
+
+#predict the outcome based on train data
+train_predict = predict(mult_logis_model3, train_data, "class")
+train_class_table = table(train_data$RA_ITA_ref, train_predict)
+round((sum(diag(train_class_table))/sum(train_class_table))*100,2)
+
+#predict the outcome based on test data
+test_predict = predict(mult_logis_model3, test_data, "class")
+test_class_table = table(test_data$RA_ITA_ref, test_predict)
+round((sum(diag(test_class_table))/sum(test_class_table))*100,2)
+
+```
+
+```{r}
+#stepwide model: model4
+mult_logis_model4 <- mult_logis_model3 %>% stepAIC(trace = FALSE)
+summary(mult_logis_model4)
+exp(coef(mult_logis_model4))
+
+# 2-tailed z test
+coef<-summary(mult_logis_model4)$coefficients
+se<-summary(mult_logis_model4)$standard.errors
+z <- coef/se
+(p_value <- (1 - pnorm(abs(z), 0, 1)) * 2)
+
+#Test the model fit info.
+anova(Intercept_model, mult_logis_model4)
+anova(mult_logis_model, mult_logis_model4)
+anova(mult_logis_model2, mult_logis_model4)
+anova(mult_logis_model3, mult_logis_model4)
+
+#Goodness of fit test
+fisher.test(train_data$RA_ITA_ref,predict(mult_logis_model4))
+
+#Pseudo R-Square of the model
+PseudoR2(mult_logis_model4, which = c("CoxSnell","Nagelkerke","McFadden"))
+
+#significance of predictors by likelihood ratio tests 
+lrtest(mult_logis_model4, "Ever.smoked")
+
+#predict the outcome based on train data
+train_predict = predict(mult_logis_model4, train_data, "class")
+train_class_table = table(train_data$RA_ITA_ref, train_predict)
+round((sum(diag(train_class_table))/sum(train_class_table))*100,2)
+
+#predict the outcome based on test data
+test_predict = predict(mult_logis_model4, test_data, "class")
+test_class_table = table(test_data$RA_ITA_ref, test_predict)
+round((sum(diag(test_class_table))/sum(test_class_table))*100,2)
+
+```
+
+
+# Method 2: Random Forest
+
+Moreover, another model we choose is random forest. 
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+# when the age is continuous 
+s = sort(sample(nrow(artery_data4), nrow(artery_data4)*0.8))
+train_data<-artery_data4[s,]
+test_data<-artery_data4[-s,]
+
+# model1
+set.seed(12345)
+rf_model <- randomForest(RA_ITA_ref~Age+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                         data = train_data, ntree = 2000, importance = TRUE)
+plot(rf_model$err.rate[,1], xlab = "Number of trees", ylab = "OOB error rate", type = "l")
+ 
+# model2 with 500 trees
+set.seed(12345)
+rf_model2 <- randomForest(RA_ITA_ref~Age+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                          data = train_data, ntree = 500, importance = TRUE)
+plot(rf_model2$err.rate[,1], xlab = "Number of trees", ylab = "OOB error rate", type = "l")
+
+# Importance of variables
+varImpPlot(rf_model2, main = "Importance of variables")
+
+# prediction
+rf_model_pred<- predict(rf_model2, newdata = test_data[,1:6])
+1-(missclass_rate <- sum(rf_model_pred != test_data$RA_ITA_ref)/nrow(test_data))
+
+```
+```{r}
+# Tune
+set.seed(123)
+opt_mtry <- tuneRF(train_data[,1:6], train_data[,8], stepFactor=1.5, improve=1e-5, ntree=500)
+print(opt_mtry)
+
+# model3 with setting the mtry
+set.seed(12345)
+rf_model3 <- randomForest(RA_ITA_ref~Age+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                          data = train_data, ntree = 500, mtry = 2, importance = TRUE)
+
+# Importance of variables
+varImpPlot(rf_model3, main = "Importance of variables")
+
+# prediction
+rf_model_pred<- predict(rf_model3, newdata = test_data[,1:6])
+1-(missclass_rate <- sum(rf_model_pred != test_data$RA_ITA_ref)/nrow(test_data))
+
+# one of the tree
+getTree(rf_model3, 1, labelVar=TRUE)
+```
+
+
+```{r}
+# when the age is categorical
+s = sort(sample(nrow(artery_data5), nrow(artery_data5)*0.8))
+train_data<-artery_data5[s,]
+test_data<-artery_data5[-s,]
+
+# model4
+set.seed(12345)
+rf_model4 <- randomForest(RA_ITA_ref~Age_group+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                          data = train_data, ntree = 2000, importance = TRUE)
+plot(rf_model4$err.rate[,1], xlab = "Number of trees", ylab = "OOB error rate", type = "l")
+ 
+# model5 with 450 trees
+set.seed(12345)
+rf_model5 <- randomForest(RA_ITA_ref~Age_group+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                          data = train_data, ntree = 450, importance = TRUE)
+plot(rf_model5$err.rate[,1], xlab = "Number of trees", ylab = "OOB error rate", type = "l")
+
+# Importance of variables
+varImpPlot(rf_model5, main = "Importance of variables")
+
+# prediction
+rf_model_pred<- predict(rf_model5, newdata = test_data[,c(2:6,9)])
+1-(missclass_rate <- sum(rf_model_pred != test_data$RA_ITA_ref)/nrow(test_data))
+
+# one of the tree
+getTree(rf_model5, 1, labelVar=TRUE)
+```
+```{r}
+# Tune
+set.seed(123)
+opt_mtry <- tuneRF(train_data[,1:6], train_data[,8], stepFactor=3, improve=1e-5, ntree=500)
+print(opt_mtry)
+
+# model3 with setting the mtry
+set.seed(12345)
+rf_model6 <- randomForest(RA_ITA_ref~Age+Gender+Diabetes+Ever.smoked+PVD+CVD, 
+                          data = train_data, ntree = 500, mtry = 1, importance = TRUE)
+
+# Importance of variables
+varImpPlot(rf_model6, main = "Importance of variables")
+
+# prediction
+rf_model_pred<- predict(rf_model6, newdata = test_data[,1:6])
+1-(missclass_rate <- sum(rf_model_pred != test_data$RA_ITA_ref)/nrow(test_data))
+```
