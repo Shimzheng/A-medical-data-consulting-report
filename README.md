@@ -5,7 +5,7 @@ There are several important outcomes measured on the arteries; two are considere
 The clients who carried out the study have thought about combining these two outcomes, which makes four groups (RA medial calcification: yes/no combined with ITA intimal abnormality yes/no).
 
 The question they have is this: 
-- how are the explanatory variables age, gender, diabetes, ever smoked, PVD and CVD related to this variable? 
+- How are the explanatory variables age, gender, diabetes, ever smoked, PVD and CVD related to this variable? 
 
 - Can you predict which of the four groups someone will be in, based on these variables and these data? 
 
